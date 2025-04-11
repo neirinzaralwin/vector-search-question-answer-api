@@ -10,7 +10,7 @@ def init_qa_service():
         # qa_pipeline = pipeline("question-answering", model="deepset/tinyroberta-squad2", token=Config.HUGGINGFACE_HUB_TOKEN)
 
         ###### [ VERSION 2 ] ######
-        # qa_pipeline = pipeline("text2text-generation", model="google/flan-t5-small", token=Config.HUGGINGFACE_HUB_TOKEN)
+        qa_pipeline = pipeline("text2text-generation", model="google/flan-t5-small", token=Config.HUGGINGFACE_HUB_TOKEN)
         print("QA service initialized successfully")
     except Exception as e:
         print(f"Failed to initialize QA service: {str(e)}")
@@ -29,9 +29,9 @@ def ask_question(context, question):
         # return result
 
         ###### [ VERSION 2 ] ######
-        # prompt = f"Please answer the following question.\nContext: {context}\nQuestion: {question}"
-        # result = qa_pipeline(prompt, max_length=100, do_sample=False)
-        # return result[0]["generated_text"]
+        prompt = f"Please answer the following question.\nContext: {context}\nQuestion: {question}"
+        result = qa_pipeline(prompt, max_length=100, do_sample=False)
+        return result[0]["generated_text"]
     except Exception as e:
         print(f"Error during question answering: {str(e)}")
         return None
