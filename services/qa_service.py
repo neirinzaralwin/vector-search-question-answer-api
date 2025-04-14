@@ -1,37 +1,59 @@
-from transformers import pipeline
 from config import Config
-
-qa_pipeline = None
+import requests
+from utils.logger import logger
 
 def init_qa_service():
-    global qa_pipeline
     try:
-        ###### [ VERSION 1 ] ######
-        # qa_pipeline = pipeline("question-answering", model="deepset/tinyroberta-squad2", token=Config.HUGGINGFACE_HUB_TOKEN)
-
-        ###### [ VERSION 2 ] ######
-        qa_pipeline = pipeline("text2text-generation", model="google/flan-t5-small", token=Config.HUGGINGFACE_HUB_TOKEN)
-        print("QA service initialized successfully")
+        # Check Ollama connectivity
+        try:
+            response = requests.get(f"{Config.OLLAMA_URL}/api/tags")
+            if response.status_code == 200:
+                logger.info(f"Ollama service detected and ready with model: {Config.OLLAMA_MODEL}")
+            else:
+                logger.error(f"Ollama service responded with status code: {response.status_code}")
+                raise RuntimeError(f"Ollama service unavailable. Status code: {response.status_code}")
+        except requests.exceptions.ConnectionError:
+            logger.error("Couldn't connect to Ollama service")
+            raise RuntimeError(f"Could not connect to Ollama at {Config.OLLAMA_URL}. Please make sure Ollama is running.")
     except Exception as e:
-        print(f"Failed to initialize QA service: {str(e)}")
+        logger.error(f"Failed to initialize QA service: {str(e)}")
         raise
-    return qa_pipeline
+    return None  # No pipeline needed for Ollama
 
 
 def ask_question(context, question):
     try:
-        if qa_pipeline is None:
-            raise RuntimeError("QA service not initialized")
+        # Use Ollama for responses
+        prompt = f"""
+        Based on the following context, please answer the question:
         
-
-        ###### [ VERSION 1 ] ######
-        # result = qa_pipeline(question=question, context=context)
-        # return result
-
-        ###### [ VERSION 2 ] ######
-        prompt = f"Please answer the following question.\nContext: {context}\nQuestion: {question}"
-        result = qa_pipeline(prompt, max_length=100, do_sample=False)
-        return result[0]["generated_text"]
+        Context: {context}
+        
+        Question: {question}
+        
+        Answer:
+        """
+        
+        response = requests.post(
+            f"{Config.OLLAMA_URL}/api/generate",
+            json={
+                "model": Config.OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                    "max_tokens": 300
+                }
+            }
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result["response"].strip()
+        else:
+            logger.error(f"Ollama request failed: {response.status_code} - {response.text}")
+            raise RuntimeError(f"Failed to get response from Ollama: {response.text}")
     except Exception as e:
-        print(f"Error during question answering: {str(e)}")
-        return None
+        logger.error(f"Error during question answering: {str(e)}")
+        return f"I'm sorry, I couldn't process your question: {str(e)}"
